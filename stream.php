@@ -53,14 +53,32 @@ if (isset($_SERVER['HTTP_RANGE'])) {
     header('HTTP/1.1 206 Partial Content');
     header("Content-Range: bytes $start-$end/" . filesize($realPath));
     header('Content-Length: ' . $length);
+    
     $fh = fopen($realPath, 'rb');
     fseek($fh, $start);
-    $buffer = fread($fh, $length);
+    $chunkSize = 8192;
+    $remaining = $length;
+    while ($remaining > 0 && !feof($fh)) {
+        if (connection_aborted()) break;
+        $toRead = min($chunkSize, $remaining);
+        $data = fread($fh, $toRead);
+        echo $data;
+        ob_flush();
+        flush();
+        $remaining -= strlen($data);
+    }
     fclose($fh);
-    echo $buffer;
     exit;
 }
 
-// Stream whole file
-readfile($realPath);
+// Stream whole file in chunks
+$fh = fopen($realPath, 'rb');
+$chunkSize = 8192;
+while (!feof($fh)) {
+    if (connection_aborted()) break;
+    echo fread($fh, $chunkSize);
+    ob_flush();
+    flush();
+}
+fclose($fh);
 ?>
