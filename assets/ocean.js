@@ -6,6 +6,9 @@ const OceanScene = (() => {
   const S = { ANCHORED: 0, DEPARTING: 1, SAILING: 2, ARRIVING: 3 };
   let cv, ctx, raf, t = 0, state = S.ANCHORED, tp = 0, lastTime = 0;
   let worldX = 0;
+  let logicalW = 600, logicalH = 190;
+  let isZenMode = false;
+  let perspective = 0; // 0=side, 1=bow, 2=stern, 3=center, 4=cabin
   let sh = { bobY: 0, bobPh: 0, roll: 0, sailAmt: 0, anchorAmt: 1, spd: 0, targetSpd: 0, startStopSpd: 0 };
   let sea = { waveH: 0.4, choppy: 0, wind: 0.3 };
   let gustT = 0, gustDur = 6, waveT = 0, waveDur = 9;
@@ -61,7 +64,7 @@ const OceanScene = (() => {
     if (!cv) return;
     ctx = cv.getContext('2d');
     resize();
-    clouds = Array.from({ length: 7 }, () => mkCloud(Math.random() * cv.width));
+    clouds = Array.from({ length: 7 }, () => mkCloud(Math.random() * logicalW));
     islands = [
       { wx: 900,  sc: 1.0, type: 'tropical', feats: genIslandFeats('tropical') },
       { wx: 2400, sc: 1.0, type: 'clan_rain', feats: genIslandFeats('clan_rain') },
@@ -85,8 +88,14 @@ const OceanScene = (() => {
   function resize() {
     if (!cv) return;
     const p = cv.parentElement;
-    cv.width  = (p ? p.clientWidth  : 600) || 600;
-    cv.height = (p ? p.clientHeight : 190) || 190;
+    logicalW = isZenMode ? window.innerWidth : (p ? p.clientWidth : 600) || 600;
+    logicalH = isZenMode ? window.innerHeight : (p ? p.clientHeight : 190) || 190;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = logicalW * dpr;
+    cv.height = logicalH * dpr;
+    cv.style.width = logicalW + 'px';
+    cv.style.height = logicalH + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   function mkCloud(x) {
@@ -113,20 +122,59 @@ const OceanScene = (() => {
     if (state === S.DEPARTING) {
       tp = Math.min(1, tp + 0.0025 * dtScale);
       sh.sailAmt   = Math.min(1, tp * 2.2);
-      sh.anchorAmt = Math.max(0, 1 - tp * 4);
+      sh.anchorAmt = Math.max(0, 1 - tp * 1.5);
       let smoothTp = tp * tp * (3 - 2 * tp);
       sh.targetSpd = smoothTp * 3.0;
       sea.waveH = 0.4 + smoothTp * 0.8;
       if (tp >= 1) { state = S.SAILING; sea.choppy = 0.22; sea.wind = 0.5; }
     } else if (state === S.SAILING) {
+      if (sea.targetWind === undefined) {
+          sea.targetWind = sea.wind;
+          sea.targetChoppy = sea.choppy;
+          sea.targetWaveH = sea.waveH;
+      }
+      
       gustT += 0.016 * dtScale; waveT += 0.016 * dtScale;
-      if (gustT > gustDur) { gustT = 0; gustDur = 4 + Math.random() * 14; sea.wind = 0.15 + Math.random() * 0.9; }
-      if (waveT > waveDur) { waveT = 0; waveDur = 5 + Math.random() * 20; sea.choppy = Math.random() * 0.95; sea.waveH = 0.35 + Math.random() * 1.8; }
+      if (gustT > gustDur) { 
+          gustT = 0; 
+          gustDur = 8 + Math.random() * 15; 
+          sea.targetWind = 0.1 + Math.random() * 0.8; 
+      }
+      if (waveT > waveDur) { 
+          waveT = 0; 
+          waveDur = 10 + Math.random() * 25; 
+          let r = Math.random();
+          if (r < 0.25) { // Calm tide
+              sea.targetChoppy = 0.05 + Math.random() * 0.15; 
+              sea.targetWaveH = 0.2 + Math.random() * 0.3;
+          } else if (r < 0.8) { // Normal tide
+              sea.targetChoppy = 0.2 + Math.random() * 0.4; 
+              sea.targetWaveH = 0.5 + Math.random() * 1.0;
+          } else { // High tide / rough sea
+              sea.targetChoppy = 0.7 + Math.random() * 0.5; 
+              sea.targetWaveH = 1.8 + Math.random() * 1.5;
+          }
+      }
+      
+      // Smooth interpolation
+      sea.wind += (sea.targetWind - sea.wind) * 0.005 * dtScale;
+      sea.choppy += (sea.targetChoppy - sea.choppy) * 0.003 * dtScale;
+      sea.waveH += (sea.targetWaveH - sea.waveH) * 0.002 * dtScale;
+      
+      // Add slight unpredictable sways
+      sea.wind += Math.sin(t * 0.4) * 0.001 * dtScale;
+      sea.choppy += Math.cos(t * 0.27) * 0.001 * dtScale;
+      
+      // Ensure positive values
+      sea.wind = Math.max(0.05, sea.wind);
+      sea.choppy = Math.max(0.05, sea.choppy);
+      sea.waveH = Math.max(0.2, sea.waveH);
+
       sh.targetSpd = 4.0 + sea.wind * 6.5; 
     } else if (state === S.ARRIVING) {
       tp = Math.min(1, tp + 0.0028 * dtScale);
       sh.sailAmt   = Math.max(0, 1 - tp * 2.2);
-      sh.anchorAmt = Math.min(1, tp * 2.2);
+      sh.anchorAmt = Math.min(1, tp * 1.5);
       let smoothTp = tp * tp * (3 - 2 * tp);
       sh.targetSpd = sh.startStopSpd * (1 - smoothTp);
       sea.choppy = Math.max(0, sea.choppy - 0.005 * dtScale);
@@ -175,15 +223,15 @@ const OceanScene = (() => {
     sh.roll  = Math.sin(sh.bobPh * 0.78) * sea.choppy * 0.072 + Math.sin(sh.bobPh * 1.43) * 0.016;
 
     const cSpd = 0.22 + sea.wind * 0.38;
-    clouds.forEach(c => { c.x -= c.spd * cSpd * dtScale; if (c.x < -c.w - 40) { c.x = cv.width + 50; c.y = 10 + Math.random() * 42; } });
+    clouds.forEach(c => { c.x -= c.spd * cSpd * dtScale; if (c.x < -c.w - 40) { c.x = logicalW + 50; c.y = 10 + Math.random() * 42; } });
 
-    if (Math.random() < 0.004 * dtScale && birds.length < 6 && state === S.SAILING) birds.push(mkBird(cv.width + 20));
+    if (Math.random() < 0.004 * dtScale && birds.length < 6 && state === S.SAILING) birds.push(mkBird(logicalW + 20));
     birds.forEach(b => { b.x -= b.spd * dtScale; b.ph += 0.1 * dtScale; });
     birds = birds.filter(b => b.x > -40);
 
     if (Math.random() < 0.015 * dtScale && floorItems.length < 12 && state === S.SAILING) {
       floorItems.push({
-        wx: worldX * 0.44 + cv.width + 100,
+        wx: worldX * 0.44 + logicalW + 100,
         type: Math.random() < 0.7 ? 'weed' : (Math.random() < 0.5 ? 'crab' : 'turtle'),
         sz: 0.8 + Math.random()*0.6,
         ph: Math.random()*Math.PI*2
@@ -199,11 +247,11 @@ const OceanScene = (() => {
        else if (r < 0.40) { type = 'dolphin'; num = 2 + Math.floor(Math.random()*3); }
        else { type = 'fish'; num = 3 + Math.floor(Math.random()*5); }
        
-       let sy = cv.height * 0.52 + 20 + Math.random()*(cv.height * 0.48 - 60);
+       let sy = logicalH * 0.52 + 20 + Math.random()*(logicalH * 0.48 - 60);
        for(let i=0; i<num; i++) {
          marineLife.push({
            type: type,
-           x: cv.width + 50 + i*18 + Math.random()*25,
+           x: logicalW + 50 + i*18 + Math.random()*25,
            y: sy + (Math.random()-0.5)*25,
            spd: (type==='whale'? 0.6 : (type==='shark'? 1.2 : (type==='dolphin'? 2.2 : 0.8))) + Math.random()*0.5,
            ph: Math.random()*Math.PI*2,
@@ -214,7 +262,7 @@ const OceanScene = (() => {
     }
 
     const last = islands[islands.length - 1];
-    if (worldX * 0.26 + cv.width > last.wx - 700) {
+    if (worldX * 0.26 + logicalW > last.wx - 700) {
       let tpe = islandTypes[Math.floor(Math.random() * islandTypes.length)];
       islands.push({ 
         wx: last.wx + 1200 + Math.random() * 1200, 
@@ -226,7 +274,7 @@ const OceanScene = (() => {
   }
 
   function drawSky() {
-    const W = cv.width, H = cv.height, wy = H * 0.52;
+    const W = logicalW, H = logicalH, wy = H * 0.52;
     const sg = ctx.createLinearGradient(0, 0, 0, wy);
     sg.addColorStop(0, '#04020f'); sg.addColorStop(0.45, '#0c051e'); sg.addColorStop(1, '#160838');
     ctx.fillStyle = sg; ctx.fillRect(0, 0, W, wy);
@@ -349,7 +397,7 @@ const OceanScene = (() => {
   }
 
   function drawIsland(isl) {
-    const W = cv.width, H = cv.height, wy = H * 0.52;
+    const W = logicalW, H = logicalH, wy = H * 0.52;
     const sx = isl.wx - worldX * 0.26;
     if (sx < -300 || sx > W + 300) return;
     
@@ -436,14 +484,14 @@ const OceanScene = (() => {
   }
 
   function drawOceanUnder() {
-    const W = cv.width, H = cv.height, wy = H * 0.52;
+    const W = logicalW, H = logicalH, wy = H * 0.52;
     const wg = ctx.createLinearGradient(0, wy, 0, H);
     wg.addColorStop(0, 'rgba(10,4,42,0.9)'); wg.addColorStop(1, 'rgba(3,2,16,0.95)');
     ctx.fillStyle = wg; ctx.fillRect(0, wy, W, H - wy);
   }
 
   function drawFloorItems() {
-    const H = cv.height;
+    const H = logicalH;
     floorItems.forEach(f => {
       let x = f.wx - worldX * 0.44;
       let y = H - 5;
@@ -511,7 +559,7 @@ const OceanScene = (() => {
   }
 
   function drawOceanWaves() {
-    const W = cv.width, H = cv.height, wy = H * 0.52;
+    const W = logicalW, H = logicalH, wy = H * 0.52;
     const layers = [
       { off: 0,   amp: 2.0 * sea.waveH, freq: 0.013, parallax: 0.22, fill: 'rgba(16,6,50,0.5)' },
       { off: 260, amp: 3.8 * sea.waveH, freq: 0.019, parallax: 0.42, fill: 'rgba(10,4,38,0.55)' },
@@ -535,7 +583,11 @@ const OceanScene = (() => {
   }
 
   function drawShip() {
-    const W = cv.width, H = cv.height, wy = H * 0.52;
+    if (perspective === 1) { drawFirstPersonBow(); return; }
+    if (perspective === 2) { drawFirstPersonStern(); return; }
+    if (perspective === 3) { drawFirstPersonCenter(); return; }
+    if (perspective === 4) { drawFirstPersonCabin(); return; }
+    const W = logicalW, H = logicalH, wy = H * 0.52;
     const sx = W * 0.32, sy = wy + sh.bobY;
     ctx.save();
     ctx.translate(sx, sy);
@@ -660,6 +712,341 @@ const OceanScene = (() => {
     ctx.restore();
   }
 
+  function drawFirstPersonBow() {
+    const W = logicalW, H = logicalH;
+    ctx.save();
+    ctx.translate(0, sh.bobY * 1.5);
+    ctx.rotate(sh.roll * 0.2);
+
+    let deckGrad = ctx.createLinearGradient(0, H - 150, 0, H);
+    deckGrad.addColorStop(0, '#1c1006');
+    deckGrad.addColorStop(1, '#3a2311');
+    ctx.fillStyle = deckGrad;
+    ctx.beginPath();
+    ctx.moveTo(-20, H + 200); ctx.lineTo(-20, H - 60); ctx.lineTo(W * 0.5, H - 60);
+    ctx.quadraticCurveTo(W * 0.9, H - 60, W + 20, H - 250);
+    ctx.lineTo(W + 20, H + 200); ctx.fill();
+
+    ctx.strokeStyle = '#110802'; ctx.lineWidth = 3;
+    for(let i=0; i<8; i++) {
+        let xBottom = -20 + (W*0.6 + 20) * (i/8);
+        let xTop = -20 + (W*0.5 + 20) * (i/8);
+        ctx.beginPath(); ctx.moveTo(xBottom, H + 200); ctx.lineTo(xTop, H - 60); ctx.stroke();
+        ctx.fillStyle = '#0a0a0a';
+        ctx.beginPath(); ctx.arc(xBottom + 5, H - 10, 2, 0, Math.PI*2); ctx.fill();
+    }
+
+    ctx.strokeStyle = '#382515'; ctx.lineWidth = 24; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-20, H - 180); ctx.lineTo(W * 0.5, H - 180);
+    ctx.quadraticCurveTo(W * 0.95, H - 180, W + 40, H - 380); ctx.stroke();
+    
+    ctx.strokeStyle = '#5c351b'; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(-20, H - 188); ctx.lineTo(W * 0.5, H - 188);
+    ctx.quadraticCurveTo(W * 0.93, H - 188, W + 36, H - 382); ctx.stroke();
+
+    ctx.strokeStyle = '#2b1b0d'; ctx.lineWidth = 16;
+    for (let x = 40; x < W * 0.7; x += 160) {
+        let railY = H - 180, deckY = H - 60;
+        if (x > W * 0.5) {
+            let p = (x - W * 0.5) / (W * 0.5);
+            railY = (H - 180) * (1 - p*p) + (H - 380) * (p*p);
+            deckY = (H - 60) * (1 - p*p) + (H - 250) * (p*p);
+        }
+        ctx.beginPath(); ctx.moveTo(x, railY); ctx.lineTo(x, deckY); ctx.stroke();
+        ctx.strokeStyle = '#4a2e15'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(x-4, railY); ctx.lineTo(x-4, deckY); ctx.stroke();
+        ctx.strokeStyle = '#2b1b0d'; ctx.lineWidth = 16;
+    }
+    
+    let lanX = W * 0.2; 
+    let lanY = H - 25; // Base of lantern
+    
+    ctx.fillStyle = '#111'; ctx.fillRect(lanX - 4, lanY, 8, 50);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.moveTo(lanX - 16, lanY - 30); ctx.lineTo(lanX + 16, lanY - 30);
+    ctx.lineTo(lanX + 22, lanY + 10); ctx.lineTo(lanX - 22, lanY + 10); ctx.fill();
+    ctx.fillStyle = 'rgba(255, 200, 50, 0.9)';
+    ctx.beginPath(); ctx.moveTo(lanX - 12, lanY - 25); ctx.lineTo(lanX + 12, lanY - 25);
+    ctx.lineTo(lanX + 16, lanY + 5); ctx.lineTo(lanX - 16, lanY + 5); ctx.fill();
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(lanX, lanY - 30); ctx.lineTo(lanX, lanY + 10); ctx.stroke();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.moveTo(lanX - 20, lanY - 30); ctx.lineTo(lanX + 20, lanY - 30);
+    ctx.lineTo(lanX, lanY - 50); ctx.fill();
+    
+    let glow = ctx.createRadialGradient(lanX, lanY - 10, 0, lanX, lanY - 10, 100);
+    glow.addColorStop(0, 'rgba(255, 180, 50, 0.5)');
+    glow.addColorStop(1, 'rgba(255, 180, 50, 0)');
+    ctx.fillStyle = glow; ctx.fillRect(lanX - 100, lanY - 110, 200, 200);
+
+
+
+
+
+    ctx.restore();
+  }
+  function drawFirstPersonStern() {
+    ctx.save();
+    ctx.translate(0, sh.bobY * 1.5);
+    ctx.rotate(sh.roll * 0.2);
+
+    let deckGrad = ctx.createLinearGradient(0, logicalH - 160, 0, logicalH);
+    deckGrad.addColorStop(0, '#1c1006');
+    deckGrad.addColorStop(1, '#3a2311');
+    ctx.fillStyle = deckGrad;
+    ctx.beginPath();
+    ctx.moveTo(-150, logicalH + 200); ctx.lineTo(-150, logicalH - 60);
+    ctx.lineTo(logicalW * 0.5, logicalH - 160); // bow tip in center
+    ctx.lineTo(logicalW + 150, logicalH - 60);
+    ctx.lineTo(logicalW + 150, logicalH + 200);
+    ctx.fill();
+
+    // Port Railing (Left)
+    ctx.strokeStyle = '#2b1b0d'; ctx.lineWidth = 12; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-150, logicalH - 90); ctx.lineTo(logicalW * 0.5, logicalH - 175); ctx.stroke();
+    ctx.strokeStyle = '#1a0f05'; ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.moveTo(-150, logicalH - 120); ctx.lineTo(logicalW * 0.5, logicalH - 195); ctx.stroke();
+
+    // Starboard Railing (Right)
+    ctx.strokeStyle = '#2b1b0d'; ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.5, logicalH - 175); ctx.lineTo(logicalW + 150, logicalH - 90); ctx.stroke();
+    ctx.strokeStyle = '#1a0f05'; ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.5, logicalH - 195); ctx.lineTo(logicalW + 150, logicalH - 120); ctx.stroke();
+
+    // Deck lines
+    ctx.strokeStyle = '#110802'; ctx.lineWidth = 3;
+    for(let i=1; i<10; i++) {
+        let xBottom = -150 + (logicalW + 300) * (i/10);
+        let xTop = logicalW * 0.5; 
+        ctx.beginPath(); ctx.moveTo(xBottom, logicalH + 200); ctx.lineTo(xTop, logicalH - 160); ctx.stroke();
+    }
+
+    let mastGrad = ctx.createLinearGradient(logicalW * 0.55, 0, logicalW * 0.55 + 30, 0);
+    mastGrad.addColorStop(0, '#1c1006'); mastGrad.addColorStop(0.5, '#4a2a14'); mastGrad.addColorStop(1, '#110802');
+    ctx.fillStyle = mastGrad; ctx.fillRect(logicalW * 0.55, logicalH - 400, 30, 300);
+    ctx.fillStyle = '#221105'; ctx.fillRect(logicalW * 0.53, logicalH - 400, 34, 15);
+
+    if (sh.sailAmt > 0.01) {
+       let sailGrad = ctx.createLinearGradient(logicalW * 0.4, 0, logicalW * 0.7, 0);
+       sailGrad.addColorStop(0, `rgba(25,25,25,${sh.sailAmt})`);
+       sailGrad.addColorStop(0.5, `rgba(45,45,45,${sh.sailAmt})`);
+       sailGrad.addColorStop(1, `rgba(15,15,15,${sh.sailAmt})`);
+       ctx.fillStyle = sailGrad;
+       
+       let billow = Math.sin(t * 1.5) * 15 * sh.sailAmt;
+       ctx.beginPath();
+       ctx.moveTo(logicalW * 0.35, logicalH - 320);
+       ctx.quadraticCurveTo(logicalW * 0.55 + billow, logicalH - 280, logicalW * 0.75, logicalH - 320);
+       ctx.quadraticCurveTo(logicalW * 0.8 + billow, logicalH - 220, logicalW * 0.75, logicalH - 140);
+       ctx.quadraticCurveTo(logicalW * 0.55 + billow*1.5, logicalH - 100, logicalW * 0.35, logicalH - 140);
+       ctx.quadraticCurveTo(logicalW * 0.3 + billow, logicalH - 220, logicalW * 0.35, logicalH - 320);
+       ctx.fill();
+       
+
+       
+       ctx.strokeStyle = '#221105'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+       ctx.beginPath(); ctx.moveTo(logicalW * 0.32, logicalH - 325); ctx.lineTo(logicalW * 0.78, logicalH - 325); ctx.stroke();
+    }
+    
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.55, logicalH - 350); ctx.lineTo(logicalW * 0.2, logicalH - 100); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.58, logicalH - 350); ctx.lineTo(logicalW * 0.8, logicalH - 120); ctx.stroke();
+
+    let helmX = logicalW * 0.25, helmY = logicalH - 70;
+    let standGrad = ctx.createLinearGradient(helmX - 15, 0, helmX + 15, 0);
+    standGrad.addColorStop(0, '#1a0f05'); standGrad.addColorStop(0.5, '#422412'); standGrad.addColorStop(1, '#0d0702');
+    ctx.fillStyle = standGrad;
+    ctx.beginPath(); ctx.moveTo(helmX - 15, helmY - 50); ctx.lineTo(helmX + 15, helmY - 50);
+    ctx.lineTo(helmX + 25, logicalH); ctx.lineTo(helmX - 25, logicalH); ctx.fill();
+    
+    ctx.beginPath(); ctx.arc(helmX, helmY - 50, 50, 0, Math.PI*2); 
+    ctx.strokeStyle = '#110802'; ctx.lineWidth = 16; ctx.stroke(); 
+    ctx.strokeStyle = '#4a2e15'; ctx.lineWidth = 12; ctx.stroke(); 
+    
+    ctx.fillStyle = '#4a2e15';
+    for(let i=0; i<8; i++) { 
+        let ang = i * Math.PI/4 + sh.roll * 1.5;
+        let cx = helmX + Math.cos(ang)*50;
+        let cy = helmY - 50 + Math.sin(ang)*50;
+        
+        ctx.beginPath(); ctx.moveTo(helmX, helmY - 50); ctx.lineTo(cx, cy);
+        ctx.lineWidth = 6; ctx.strokeStyle = '#2b190a'; ctx.stroke();
+        
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.lineTo(helmX + Math.cos(ang)*65, helmY - 50 + Math.sin(ang)*65);
+        ctx.lineWidth = 8; ctx.strokeStyle = '#4a2e15'; ctx.lineCap = 'round'; ctx.stroke();
+    }
+    ctx.fillStyle = '#b89451';
+    ctx.beginPath(); ctx.arc(helmX, helmY - 50, 10, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+  }
+  function drawFirstPersonCenter() {
+    ctx.save();
+    ctx.translate(0, sh.bobY * 1.2);
+    ctx.rotate(sh.roll * 0.3);
+
+    let deckY = logicalH - 70;
+    let deckGrad = ctx.createLinearGradient(0, deckY, 0, logicalH);
+    deckGrad.addColorStop(0, '#221309'); deckGrad.addColorStop(1, '#3a2311');
+    ctx.fillStyle = deckGrad; ctx.fillRect(-50, deckY, logicalW + 100, 200);
+    
+    ctx.strokeStyle = '#110802'; ctx.lineWidth = 2;
+    for(let y = deckY + 10; y < logicalH + 150; y += 15) {
+        ctx.beginPath(); ctx.moveTo(-50, y); ctx.lineTo(logicalW + 100, y); ctx.stroke();
+    }
+
+    ctx.fillStyle = '#110802'; ctx.fillRect(-50, deckY - 15, logicalW + 100, 15);
+    
+    ctx.fillStyle = '#1a0f05';
+    for (let x = -130; x < logicalW + 200; x += 160) {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath(); ctx.moveTo(x + 20, deckY); ctx.lineTo(x + 50, deckY + 30); ctx.lineTo(x + 10, deckY + 30); ctx.lineTo(x - 20, deckY); ctx.fill();
+        let pGrad = ctx.createLinearGradient(x-15, 0, x+15, 0);
+        pGrad.addColorStop(0, '#2b190a'); pGrad.addColorStop(0.5, '#4a2e15'); pGrad.addColorStop(1, '#110802');
+        ctx.fillStyle = pGrad; ctx.fillRect(x - 15, deckY - 140, 30, 140);
+        ctx.fillStyle = '#110802';
+        ctx.fillRect(x - 18, deckY - 145, 36, 10); ctx.fillRect(x - 18, deckY - 30, 36, 10);
+    }
+
+    let railGrad = ctx.createLinearGradient(0, deckY - 160, 0, deckY - 130);
+    railGrad.addColorStop(0, '#5c351b'); railGrad.addColorStop(0.5, '#3a1f0f'); railGrad.addColorStop(1, '#110802');
+    ctx.fillStyle = railGrad; ctx.fillRect(-50, deckY - 160, logicalW + 100, 30);
+
+    let cx = logicalW * 0.65, cy = deckY - 30;
+    ctx.fillStyle = '#422412'; ctx.fillRect(cx - 40, cy, 80, 40);
+    ctx.fillStyle = '#221105'; ctx.fillRect(cx - 30, cy + 10, 60, 20); 
+    ctx.fillStyle = '#110802';
+    ctx.beginPath(); ctx.arc(cx - 30, cy + 40, 15, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 30, cy + 40, 15, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#3a200a';
+    ctx.beginPath(); ctx.arc(cx - 30, cy + 40, 12, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 30, cy + 40, 12, 0, Math.PI*2); ctx.fill();
+
+    let barrelGrad = ctx.createLinearGradient(cx - 20, 0, cx + 20, 0);
+    barrelGrad.addColorStop(0, '#111'); barrelGrad.addColorStop(0.3, '#555'); barrelGrad.addColorStop(0.6, '#222'); barrelGrad.addColorStop(1, '#050505');
+    ctx.fillStyle = barrelGrad;
+    ctx.beginPath(); ctx.moveTo(cx - 25, cy + 10); ctx.lineTo(cx - 15, deckY - 150); ctx.lineTo(cx + 15, deckY - 150); ctx.lineTo(cx + 25, cy + 10); ctx.fill();
+    
+    ctx.fillStyle = '#333'; ctx.beginPath(); ctx.ellipse(cx, deckY - 150, 18, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#050505'; ctx.beginPath(); ctx.ellipse(cx, deckY - 150, 12, 5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.ellipse(cx, deckY - 100, 21, 6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx, deckY - 50, 24, 8, 0, 0, Math.PI*2); ctx.fill();
+
+    function drawBarrel(bx, by) {
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.beginPath(); ctx.ellipse(bx, by + 45, 35, 10, 0, 0, Math.PI*2); ctx.fill();
+        
+        let bGrad = ctx.createLinearGradient(bx - 35, 0, bx + 35, 0);
+        bGrad.addColorStop(0, '#1a0f05'); bGrad.addColorStop(0.5, '#4a2a14'); bGrad.addColorStop(1, '#0a0501');
+        ctx.fillStyle = bGrad;
+        ctx.beginPath(); ctx.moveTo(bx - 25, by - 50); ctx.quadraticCurveTo(bx - 40, by, bx - 25, by + 50);
+        ctx.lineTo(bx + 25, by + 50); ctx.quadraticCurveTo(bx + 40, by, bx + 25, by - 50); ctx.fill();
+        
+        ctx.fillStyle = '#3a200a'; ctx.beginPath(); ctx.ellipse(bx, by - 50, 25, 8, 0, 0, Math.PI*2); ctx.fill();
+        
+        ctx.strokeStyle = '#111'; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.moveTo(bx - 32, by - 25); ctx.quadraticCurveTo(bx, by - 15, bx + 32, by - 25); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx - 34, by); ctx.quadraticCurveTo(bx, by + 10, bx + 34, by); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(bx - 32, by + 25); ctx.quadraticCurveTo(bx, by + 35, bx + 32, by + 25); ctx.stroke();
+        
+        ctx.strokeStyle = '#1a0f05'; ctx.lineWidth = 2;
+        for(let i=-2; i<=2; i++) {
+            ctx.beginPath(); ctx.moveTo(bx + i*10, by - 50); ctx.quadraticCurveTo(bx + i*13, by, bx + i*10, by + 50); ctx.stroke();
+        }
+    }
+    drawBarrel(logicalW * 0.28, deckY - 50);
+    drawBarrel(logicalW * 0.45, deckY - 45);
+    ctx.restore();
+  }
+  function drawFirstPersonCabin() {
+    ctx.save();
+    ctx.translate(0, sh.bobY * 0.5);
+    ctx.rotate(sh.roll * 0.1);
+    
+    // Anchor passing window
+    let ax = logicalW * 0.85;
+    let ay = -100 + sh.anchorAmt * (logicalH + 300); 
+    
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 10;
+    ctx.beginPath(); ctx.moveTo(ax, -200); ctx.lineTo(ax, ay); ctx.stroke();
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 4;
+    for(let y = -200; y < ay; y += 15) {
+        ctx.beginPath(); ctx.ellipse(ax, y, 6, 12, 0, 0, Math.PI*2); ctx.stroke();
+    }
+    
+    ctx.fillStyle = '#222';
+    ctx.fillRect(ax - 5, ay, 10, 80); 
+    ctx.fillRect(ax - 30, ay + 15, 60, 10); 
+    ctx.beginPath(); ctx.arc(ax, ay + 80, 40, 0, Math.PI);
+    ctx.lineWidth = 12; ctx.strokeStyle = '#222'; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ax + 40, ay + 80); ctx.lineTo(ax + 55, ay + 65); ctx.lineTo(ax + 25, ay + 65); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(ax - 40, ay + 80); ctx.lineTo(ax - 55, ay + 65); ctx.lineTo(ax - 25, ay + 65); ctx.fill();
+
+    let woodGrad = ctx.createLinearGradient(0, 0, logicalW, logicalH);
+    woodGrad.addColorStop(0, '#311a0c'); woodGrad.addColorStop(0.5, '#221105'); woodGrad.addColorStop(1, '#110802');
+    
+    const f = 50;
+    ctx.fillStyle = woodGrad;
+    ctx.fillRect(-100, -100, logicalW + 200, f + 100); // top extending up
+    ctx.fillRect(-100, logicalH - f * 2.5, logicalW + 200, f * 2.5 + 200); // bottom extending down
+    ctx.fillRect(-100, -100, f + 100, logicalH + 200); // left extending left
+    ctx.fillRect(logicalW - f, -100, f + 100, logicalH + 200); // right extending right
+    
+    ctx.fillRect(logicalW * 0.33 - 12, 0, 24, logicalH); ctx.fillRect(logicalW * 0.66 - 12, 0, 24, logicalH);
+    ctx.fillRect(0, logicalH * 0.45 - 12, logicalW, 24);
+
+    ctx.lineWidth = 4;
+    function bevel(x, y, w, h) {
+       ctx.strokeStyle = '#000'; ctx.strokeRect(x, y, w, h);
+       ctx.strokeStyle = '#4a2b15';
+       ctx.beginPath(); ctx.moveTo(x+2, y+h-2); ctx.lineTo(x+2, y+2); ctx.lineTo(x+w-2, y+2); ctx.stroke();
+       ctx.strokeStyle = '#0a0501';
+       ctx.beginPath(); ctx.moveTo(x+w-2, y+2); ctx.lineTo(x+w-2, y+h-2); ctx.lineTo(x+2, y+h-2); ctx.stroke();
+    }
+    bevel(f, f, logicalW*0.33 - 12 - f, logicalH*0.45 - 12 - f);
+    bevel(logicalW*0.33 + 12, f, logicalW*0.33 - 24, logicalH*0.45 - 12 - f);
+    bevel(logicalW*0.66 + 12, f, logicalW - f - (logicalW*0.66 + 12), logicalH*0.45 - 12 - f);
+    bevel(f, logicalH*0.45 + 12, logicalW*0.33 - 12 - f, logicalH - f*2.5 - (logicalH*0.45 + 12));
+    bevel(logicalW*0.33 + 12, logicalH*0.45 + 12, logicalW*0.33 - 24, logicalH - f*2.5 - (logicalH*0.45 + 12));
+    bevel(logicalW*0.66 + 12, logicalH*0.45 + 12, logicalW - f - (logicalW*0.66 + 12), logicalH - f*2.5 - (logicalH*0.45 + 12));
+
+    let deskY = logicalH - 80;
+    let deskGrad = ctx.createLinearGradient(0, deskY, 0, logicalH);
+    deskGrad.addColorStop(0, '#422412'); deskGrad.addColorStop(1, '#1b0e06');
+    ctx.fillStyle = deskGrad; ctx.fillRect(-100, deskY, logicalW + 200, 200); // extend down
+    ctx.fillStyle = '#5c351b'; ctx.fillRect(-100, deskY, logicalW + 200, 4);
+    
+    ctx.fillStyle = '#e8d5a7';
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.35, deskY + 10); ctx.lineTo(logicalW * 0.65, deskY + 10);
+    ctx.lineTo(logicalW * 0.72, logicalH - 10); ctx.lineTo(logicalW * 0.28, logicalH - 10); ctx.fill();
+    ctx.strokeStyle = '#c4ae7e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.35, deskY + 30);
+    ctx.quadraticCurveTo(logicalW * 0.45, deskY + 40, logicalW * 0.42, deskY + 60);
+    ctx.quadraticCurveTo(logicalW * 0.5, deskY + 65, logicalW * 0.55, deskY + 50); ctx.stroke();
+    ctx.strokeStyle = '#9c3131'; ctx.beginPath(); ctx.arc(logicalW * 0.62, logicalH - 35, 12, 0, Math.PI*2); ctx.stroke();
+    
+    ctx.fillStyle = '#0a0a0a'; ctx.beginPath(); ctx.ellipse(logicalW * 0.75, logicalH - 30, 10, 15, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.ellipse(logicalW * 0.75, logicalH - 45, 6, 3, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#f4f4f4';
+    ctx.beginPath(); ctx.moveTo(logicalW * 0.75, logicalH - 45); 
+    ctx.quadraticCurveTo(logicalW * 0.72, logicalH - 80, logicalW * 0.8, logicalH - 90);
+    ctx.quadraticCurveTo(logicalW * 0.77, logicalH - 70, logicalW * 0.76, logicalH - 45); ctx.fill();
+    
+    let candleX = logicalW * 0.22, candleY = logicalH - 45;
+    ctx.fillStyle = '#e5e0d8'; ctx.fillRect(candleX - 8, candleY - 30, 16, 30);
+    ctx.fillStyle = '#b89451'; ctx.beginPath(); ctx.ellipse(candleX, candleY, 20, 8, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath(); ctx.moveTo(candleX, candleY - 30);
+    ctx.quadraticCurveTo(candleX + 5, candleY - 40, candleX, candleY - 45);
+    ctx.quadraticCurveTo(candleX - 5, candleY - 40, candleX, candleY - 30); ctx.fill();
+    let glow = ctx.createRadialGradient(candleX, candleY - 35, 0, candleX, candleY - 35, 100);
+    glow.addColorStop(0, 'rgba(255, 150, 0, 0.4)'); glow.addColorStop(1, 'rgba(255, 150, 0, 0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(candleX, candleY - 35, 100, 0, Math.PI*2); ctx.fill();
+
+    ctx.restore();
+  }
   function loop(timestamp) {
     if (!cv) return;
     if (!lastTime) lastTime = timestamp || performance.now();
@@ -669,7 +1056,7 @@ const OceanScene = (() => {
     let dtScale = dt / 16.666;
 
     update(dtScale);
-    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.clearRect(0, 0, logicalW, logicalH);
     drawSky();
     drawClouds();
     islands.forEach(drawIsland);
@@ -684,5 +1071,15 @@ const OceanScene = (() => {
 
   window.addEventListener('resize', resize);
 
-  return { init };
+  function setZenMode(val) {
+    isZenMode = val;
+  }
+
+  
+  function cyclePerspective() { perspective = (perspective + 1) % 5; }
+  function setPerspective(p) { perspective = p; }
+  function getPerspective() { return perspective; }
+
+  return { init, setZenMode, cyclePerspective, setPerspective, getPerspective };
+
 })();

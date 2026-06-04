@@ -873,6 +873,45 @@
             100% { transform: translateY(0px); }
         }
 
+        /* ── ZEN MODE ─────────────────────────────────────────────── */
+        .zen-mode-active {
+            grid-template-rows: 0 1fr 0 !important;
+            grid-template-columns: 0 1fr !important;
+        }
+        
+        .zen-mode-active .top-header,
+        .zen-mode-active .player-bar {
+            height: 0;
+            padding: 0;
+            overflow: hidden;
+            opacity: 0;
+            border: none;
+        }
+
+        .zen-mode-active .sidebar,
+        .zen-mode-active .main-recent,
+        .zen-mode-active .topbar,
+        .zen-mode-active .mobile-tabs {
+            display: none !important;
+        }
+
+        .zen-mode-active .main {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
+            grid-template-areas: "hero";
+        }
+
+        .zen-mode-active .main-hero {
+            margin: 0 !important;
+            border-radius: 0 !important;
+            border: none !important;
+            z-index: 9999;
+        }
+
+        .zen-mode-active #ocean-canvas {
+            border-radius: 0 !important;
+        }
+
         /* ── MOBILE RESPONSIVENESS ────────────────────────────────── */
         .mobile-tabs {
             grid-area: tabs;
@@ -1136,7 +1175,8 @@
          'has-player': current,
          'tab-library': currentTab === 'library',
          'tab-player': currentTab === 'player',
-         'tab-recent': currentTab === 'recent'
+         'tab-recent': currentTab === 'recent',
+         'zen-mode-active': zenMode
      }">
 
     <!-- FULL-WIDTH HEADER -->
@@ -1144,6 +1184,8 @@
         <span class="logo">🎧 M<span style="color:var(--accent)">Spot</span></span>
         <input class="search-input" type="text" placeholder="Search songs…" x-model="query" @input="filter()" />
         <div class="header-right">
+            <button @click="OceanScene && OceanScene.cyclePerspective && OceanScene.cyclePerspective()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:16px;font-weight:500;cursor:pointer;font-family:inherit;font-size:0.75rem;transition:all 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='var(--surface2)'">Switch View</button>
+            <button @click="toggleZen()" style="background:var(--accent-gradient);border:none;color:#fff;padding:6px 16px;border-radius:16px;font-weight:600;cursor:pointer;font-family:inherit;font-size:0.85rem;box-shadow:0 2px 8px rgba(255,0,127,0.3);">Zen</button>
             <span x-text="tracks.length + ' tracks'"></span>
         </div>
     </header>
@@ -1196,6 +1238,15 @@
         <!-- Hero column -->
         <div class="main-hero" style="position: relative;">
             <canvas id="ocean-canvas" style="width: 100%; height: 100%; display: block; border-radius: 24px;" x-show="current"></canvas>
+            
+            <!-- Zen Mode Overlay -->
+            <div class="zen-ui" x-show="zenMode" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none; transition: opacity 0.5s;">
+                <div style="position:absolute; top:24px; left:32px; pointer-events:auto; z-index:10000;">
+                    <div style="font-size:1.8rem; font-weight:700; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.8), 0 0 15px rgba(0,0,0,0.5);" x-text="current ? current.name : ''"></div>
+                    <div style="font-size:1.1rem; font-weight:500; color:var(--text-secondary); text-shadow:0 1px 5px rgba(0,0,0,0.8); margin-top:4px;" x-text="elapsed + ' / ' + duration"></div>
+                </div>
+                <button @click="toggleZen()" style="position:absolute; top:24px; right:32px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px 20px; border-radius:24px; font-weight:600; cursor:pointer; pointer-events:auto; backdrop-filter:blur(12px); font-family:inherit; font-size:0.85rem; transition:all 0.3s; z-index:10000;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'">Exit Zen</button>
+            </div>
             
             <!-- No track yet -->
             <template x-if="!current">
@@ -1299,6 +1350,7 @@ function mspot() {
         current: null, currentArt: 'assets/album_placeholder.png', isPlaying: false,
         loopMode: 'none', // 'none' | 'one' | 'all'
         shuffle: false,
+        zenMode: false,
         currentTab: 'library', // active view on mobile: 'library' | 'player' | 'recent'
         recent: JSON.parse(localStorage.getItem('mspot_recent') || '[]'),
         playCounts: {}, // loaded from server (stats.php)
@@ -1461,6 +1513,18 @@ function mspot() {
             if (!this.current) return;
             const audio = this.$refs.audio;
             if (this.isPlaying) audio.pause(); else audio.play();
+        },
+
+        toggleZen() {
+            this.zenMode = !this.zenMode;
+            if (typeof OceanScene !== 'undefined') {
+                if (OceanScene.setZenMode) OceanScene.setZenMode(this.zenMode);
+                // If entering Zen Mode and perspective is side (0), default to front (1)
+                if (this.zenMode && OceanScene.getPerspective && OceanScene.getPerspective() === 0) {
+                    OceanScene.setPerspective(1);
+                }
+            }
+            setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
         },
 
         toggleShuffle() { this.shuffle = !this.shuffle; },
