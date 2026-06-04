@@ -6,7 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MSpot • Local Music</title>
     <link rel="icon" href="data:,">
-    <script src="assets/ocean.js" defer></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module" src="assets/ocean_3d.js"></script>
     <script src="assets/alpine.min.js" defer></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1184,7 +1192,7 @@
         <span class="logo">🎧 M<span style="color:var(--accent)">Spot</span></span>
         <input class="search-input" type="text" placeholder="Search songs…" x-model="query" @input="filter()" />
         <div class="header-right">
-            <button @click="OceanScene && OceanScene.cyclePerspective && OceanScene.cyclePerspective()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:16px;font-weight:500;cursor:pointer;font-family:inherit;font-size:0.75rem;transition:all 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='var(--surface2)'">Switch View</button>
+            <button @click="window.OceanScene && window.OceanScene.cyclePerspective && window.OceanScene.cyclePerspective()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:16px;font-weight:500;cursor:pointer;font-family:inherit;font-size:0.75rem;transition:all 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='var(--surface2)'">Switch View</button>
             <button @click="toggleZen()" style="background:var(--accent-gradient);border:none;color:#fff;padding:6px 16px;border-radius:16px;font-weight:600;cursor:pointer;font-family:inherit;font-size:0.85rem;box-shadow:0 2px 8px rgba(255,0,127,0.3);">Zen</button>
             <span x-text="tracks.length + ' tracks'"></span>
         </div>
@@ -1359,7 +1367,15 @@ function mspot() {
 
         boot() {
             console.log("MSpot boot() started");
-            if (typeof OceanScene !== 'undefined') OceanScene.init();
+            // OceanScene is now attached to window by ocean_3d.js
+            const checkOcean = setInterval(() => {
+                if (typeof window.OceanScene !== 'undefined') {
+                    window.OceanScene.init();
+                    if (this.zenMode) window.OceanScene.setZenMode(true);
+                    clearInterval(checkOcean);
+                }
+            }, 50);
+            
             const audio = this.$refs.audio;
 
             // IntersectionObserver — lazy load cover art only when row scrolls into view
@@ -1432,8 +1448,14 @@ function mspot() {
                     this.next();
                 }
             });
-            audio.addEventListener('pause', () => this.isPlaying = false);
-            audio.addEventListener('play',  () => this.isPlaying = true);
+            audio.addEventListener('pause', () => {
+                this.isPlaying = false;
+                if (typeof window.OceanScene !== 'undefined' && window.OceanScene.setPlaying) window.OceanScene.setPlaying(false);
+            });
+            audio.addEventListener('play',  () => {
+                this.isPlaying = true;
+                if (typeof window.OceanScene !== 'undefined' && window.OceanScene.setPlaying) window.OceanScene.setPlaying(true);
+            });
         },
 
         _observeAll() {
@@ -1517,11 +1539,11 @@ function mspot() {
 
         toggleZen() {
             this.zenMode = !this.zenMode;
-            if (typeof OceanScene !== 'undefined') {
-                if (OceanScene.setZenMode) OceanScene.setZenMode(this.zenMode);
+            if (typeof window.OceanScene !== 'undefined') {
+                if (window.OceanScene.setZenMode) window.OceanScene.setZenMode(this.zenMode);
                 // If entering Zen Mode and perspective is side (0), default to front (1)
-                if (this.zenMode && OceanScene.getPerspective && OceanScene.getPerspective() === 0) {
-                    OceanScene.setPerspective(1);
+                if (this.zenMode && window.OceanScene.getPerspective && window.OceanScene.getPerspective() === 0) {
+                    window.OceanScene.setPerspective(1);
                 }
             }
             setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
