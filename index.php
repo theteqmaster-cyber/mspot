@@ -6,35 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MSpot • Local Music</title>
     <link rel="icon" href="data:,">
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-        }
-      }
-    </script>
-    <script type="module" src="assets/ocean_3d.js"></script>
+    
     <script src="assets/alpine.min.js" defer></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg: #0f0c29;
-            --bg-gradient: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            --bg: #121212;
             --surface: rgba(255, 255, 255, 0.05);
             --surface-hover: rgba(255, 255, 255, 0.1);
             --surface2: rgba(255, 255, 255, 0.08);
             --border: rgba(255, 255, 255, 0.1);
             --accent: #ff007f;
-            --accent2: #7928ca;
-            --accent-gradient: linear-gradient(135deg, #ff007f, #7928ca);
+            --accent-gradient: #ff007f;
             --text: #ffffff;
             --text-secondary: #e0e0e0;
             --muted: #a0a0b0;
             --sidebar-w: 300px;
-            --player-h: 100px;
-            --glass-blur: blur(20px);
+            --player-h: 90px;
             --font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
         }
 
@@ -44,7 +33,6 @@
             height: 100%;
             overflow: hidden;
             background: var(--bg);
-            background: var(--bg-gradient);
             margin: 0;
             padding: 0;
         }
@@ -52,14 +40,6 @@
         body {
             font-family: var(--font-family);
             color: var(--text);
-            background-size: 200% 200%;
-            animation: gradientBG 15s ease infinite;
-        }
-        
-        @keyframes gradientBG {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
         }
 
         #app-container {
@@ -74,16 +54,13 @@
             height: 100dvh;
             width: 100%;
             overflow: hidden;
-            background: radial-gradient(circle at 15% 50%, rgba(121, 40, 202, 0.15), transparent 50%),
-                        radial-gradient(circle at 85% 30%, rgba(255, 0, 127, 0.15), transparent 50%);
+            background: var(--bg);
         }
 
         /* ── HEADER ───────────────────────────────────── */
         .top-header {
             grid-area: header;
             background: rgba(15, 12, 41, 0.6);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
@@ -147,8 +124,6 @@
         .sidebar {
             grid-area: sidebar;
             background: rgba(15, 12, 41, 0.4);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -296,7 +271,6 @@
             inset: -40px; /* extended to hide blurry edges */
             background-size: cover;
             background-position: center;
-            filter: blur(25px) brightness(0.6) saturate(1.2);
             z-index: 0;
             transition: background-image 0.6s ease;
         }
@@ -352,8 +326,6 @@
             margin: 0 40px 20px 0;
             border-radius: 24px;
             background: rgba(15, 12, 41, 0.4);
-            backdrop-filter: var(--glass-blur);
-            -webkit-backdrop-filter: var(--glass-blur);
             border: 1px solid var(--border);
         }
 
@@ -462,7 +434,6 @@
             inset: -40px;
             background-size: cover;
             background-position: center;
-            filter: blur(50px) brightness(0.4) saturate(1.8);
             transform: scale(1.1);
             transition: background-image 0.8s ease, transform 10s ease;
             z-index: 0;
@@ -547,8 +518,7 @@
         .player-bar {
             grid-area: player;
             background: rgba(15, 12, 41, 0.7);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
+            -webkit-
             border-top: 1px solid rgba(255,255,255,0.05);
             display: grid;
             grid-template-columns: 1fr 2fr 1fr;
@@ -798,63 +768,6 @@
 
         .eq.paused span { animation-play-state: paused; height: 4px; }
 
-        /* ─ Waveform animation at top of hero ─ */
-        .audio-wave {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            gap: 4px;
-            padding: 0 20px;
-            z-index: 2;
-            opacity: 0;
-            transition: opacity 0.5s ease;
-        }
-
-        .audio-wave.active { opacity: 0.8; }
-
-        .audio-wave span {
-            flex: 1;
-            max-width: 8px;
-            border-radius: 4px 4px 0 0;
-            background: var(--accent-gradient);
-            animation: none;
-            height: 6px;
-            transition: height 0.2s;
-            box-shadow: 0 0 10px rgba(255, 0, 127, 0.4);
-        }
-
-        .audio-wave.active span:nth-child(1)  { animation: wv1 0.7s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(2)  { animation: wv2 0.5s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(3)  { animation: wv3 0.9s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(4)  { animation: wv4 0.6s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(5)  { animation: wv5 0.8s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(6)  { animation: wv1 0.55s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(7)  { animation: wv3 0.75s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(8)  { animation: wv2 0.65s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(9)  { animation: wv5 0.85s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(10) { animation: wv4 0.6s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(11) { animation: wv1 0.7s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(12) { animation: wv2 0.5s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(13) { animation: wv3 0.9s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(14) { animation: wv4 0.6s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(15) { animation: wv5 0.8s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(16) { animation: wv1 0.55s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(17) { animation: wv3 0.75s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(18) { animation: wv2 0.65s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(19) { animation: wv5 0.85s ease-in-out infinite alternate; }
-        .audio-wave.active span:nth-child(20) { animation: wv4 0.6s ease-in-out infinite alternate; }
-
-        @keyframes wv1 { from{height:6px}  to{height:45px} }
-        @keyframes wv2 { from{height:12px}  to{height:35px} }
-        @keyframes wv3 { from{height:18px} to{height:55px} }
-        @keyframes wv4 { from{height:10px}  to{height:30px} }
-        @keyframes wv5 { from{height:15px} to{height:48px} }
-
         /* Empty state */
         .empty-state {
             display: flex;
@@ -872,60 +785,14 @@
             font-size: 5rem; 
             opacity: 0.5; 
             filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
-            animation: float 6s ease-in-out infinite;
-        }
-        
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-            100% { transform: translateY(0px); }
         }
 
-        /* ── ZEN MODE ─────────────────────────────────────────────── */
-        .zen-mode-active {
-            grid-template-rows: 0 1fr 0 !important;
-            grid-template-columns: 0 1fr !important;
-        }
-        
-        .zen-mode-active .top-header,
-        .zen-mode-active .player-bar {
-            height: 0;
-            padding: 0;
-            overflow: hidden;
-            opacity: 0;
-            border: none;
-        }
-
-        .zen-mode-active .sidebar,
-        .zen-mode-active .main-recent,
-        .zen-mode-active .topbar,
-        .zen-mode-active .mobile-tabs {
-            display: none !important;
-        }
-
-        .zen-mode-active .main {
-            grid-template-columns: 1fr;
-            grid-template-rows: 1fr;
-            grid-template-areas: "hero";
-        }
-
-        .zen-mode-active .main-hero {
-            margin: 0 !important;
-            border-radius: 0 !important;
-            border: none !important;
-            z-index: 9999;
-        }
-
-        .zen-mode-active #ocean-canvas {
-            border-radius: 0 !important;
-        }
 
         /* ── MOBILE RESPONSIVENESS ────────────────────────────────── */
         .mobile-tabs {
             grid-area: tabs;
             display: none;
             background: rgba(15, 12, 41, 0.9);
-            backdrop-filter: blur(20px);
             border-top: 1px solid rgba(255,255,255,0.1);
             justify-content: space-around;
             align-items: center;
@@ -973,15 +840,6 @@
             display: none !important;
         }
 
-        /* Fade-in transitions between mobile tabs */
-        .sidebar, .main {
-            animation: tabFadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        @keyframes tabFadeIn {
-            from { opacity: 0; transform: translateY(10px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
 
         @media (max-width: 768px) {
             #app-container {
@@ -1183,8 +1041,7 @@
          'has-player': current,
          'tab-library': currentTab === 'library',
          'tab-player': currentTab === 'player',
-         'tab-recent': currentTab === 'recent',
-         'zen-mode-active': zenMode
+         'tab-recent': currentTab === 'recent'
      }">
 
     <!-- FULL-WIDTH HEADER -->
@@ -1192,8 +1049,7 @@
         <span class="logo">🎧 M<span style="color:var(--accent)">Spot</span></span>
         <input class="search-input" type="text" placeholder="Search songs…" x-model="query" @input="filter()" />
         <div class="header-right">
-            <button @click="window.OceanScene && window.OceanScene.cyclePerspective && window.OceanScene.cyclePerspective()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:16px;font-weight:500;cursor:pointer;font-family:inherit;font-size:0.75rem;transition:all 0.2s;" onmouseover="this.style.background='var(--surface-hover)'" onmouseout="this.style.background='var(--surface2)'">Switch View</button>
-            <button @click="toggleZen()" style="background:var(--accent-gradient);border:none;color:#fff;padding:6px 16px;border-radius:16px;font-weight:600;cursor:pointer;font-family:inherit;font-size:0.85rem;box-shadow:0 2px 8px rgba(255,0,127,0.3);">Zen</button>
+            
             <span x-text="tracks.length + ' tracks'"></span>
         </div>
     </header>
@@ -1244,21 +1100,20 @@
         </div>
 
         <!-- Hero column -->
-        <div class="main-hero" style="position: relative;">
-            <canvas id="ocean-canvas" style="width: 100%; height: 100%; display: block; border-radius: 24px;" x-show="current"></canvas>
-            
-            <!-- Zen Mode Overlay -->
-            <div class="zen-ui" x-show="zenMode" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; z-index:9999; pointer-events:none; transition: opacity 0.5s;">
-                <div style="position:absolute; top:24px; left:32px; pointer-events:auto; z-index:10000;">
-                    <div style="font-size:1.8rem; font-weight:700; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.8), 0 0 15px rgba(0,0,0,0.5);" x-text="current ? current.name : ''"></div>
-                    <div style="font-size:1.1rem; font-weight:500; color:var(--text-secondary); text-shadow:0 1px 5px rgba(0,0,0,0.8); margin-top:4px;" x-text="elapsed + ' / ' + duration"></div>
+                <div class="main-hero" style="position: relative;">
+            <div class="now-playing-hero" x-show="current">
+                <div class="hero-content">
+                    <img class="hero-art" :src="currentArt" alt="Album Art" />
+                    <div class="hero-title marquee" :class="{playing: isPlaying}">
+                        <span x-text="current ? current.name : ''"></span>
+                    </div>
+                    <div class="hero-sub">Local Library</div>
                 </div>
-                <button @click="toggleZen()" style="position:absolute; top:24px; right:32px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.2); color:#fff; padding:8px 20px; border-radius:24px; font-weight:600; cursor:pointer; pointer-events:auto; backdrop-filter:blur(12px); font-family:inherit; font-size:0.85rem; transition:all 0.3s; z-index:10000;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.5)'">Exit Zen</button>
             </div>
             
             <!-- No track yet -->
             <template x-if="!current">
-                <div class="empty-state" style="position: absolute; inset: 0; background: rgba(15,12,41,0.8); backdrop-filter: blur(20px); z-index: 10; border-radius: 24px;">
+                <div class="empty-state" style="position: absolute; inset: 0; background: var(--bg); z-index: 10; border-radius: 24px;">
                     <div class="empty-icon">🎵</div>
                     <div style="font-size:1rem;font-weight:600">Pick something to play</div>
                     <div style="font-size:.85rem">Select a track from the sidebar</div>
@@ -1358,7 +1213,7 @@ function mspot() {
         current: null, currentArt: 'assets/album_placeholder.png', isPlaying: false,
         loopMode: 'none', // 'none' | 'one' | 'all'
         shuffle: false,
-        zenMode: false,
+        
         currentTab: 'library', // active view on mobile: 'library' | 'player' | 'recent'
         recent: JSON.parse(localStorage.getItem('mspot_recent') || '[]'),
         playCounts: {}, // loaded from server (stats.php)
@@ -1367,14 +1222,6 @@ function mspot() {
 
         boot() {
             console.log("MSpot boot() started");
-            // OceanScene is now attached to window by ocean_3d.js
-            const checkOcean = setInterval(() => {
-                if (typeof window.OceanScene !== 'undefined') {
-                    window.OceanScene.init();
-                    if (this.zenMode) window.OceanScene.setZenMode(true);
-                    clearInterval(checkOcean);
-                }
-            }, 50);
             
             const audio = this.$refs.audio;
 
@@ -1450,11 +1297,11 @@ function mspot() {
             });
             audio.addEventListener('pause', () => {
                 this.isPlaying = false;
-                if (typeof window.OceanScene !== 'undefined' && window.OceanScene.setPlaying) window.OceanScene.setPlaying(false);
+                
             });
             audio.addEventListener('play',  () => {
                 this.isPlaying = true;
-                if (typeof window.OceanScene !== 'undefined' && window.OceanScene.setPlaying) window.OceanScene.setPlaying(true);
+                
             });
         },
 
@@ -1537,17 +1384,7 @@ function mspot() {
             if (this.isPlaying) audio.pause(); else audio.play();
         },
 
-        toggleZen() {
-            this.zenMode = !this.zenMode;
-            if (typeof window.OceanScene !== 'undefined') {
-                if (window.OceanScene.setZenMode) window.OceanScene.setZenMode(this.zenMode);
-                // If entering Zen Mode and perspective is side (0), default to front (1)
-                if (this.zenMode && window.OceanScene.getPerspective && window.OceanScene.getPerspective() === 0) {
-                    window.OceanScene.setPerspective(1);
-                }
-            }
-            setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
-        },
+
 
         toggleShuffle() { this.shuffle = !this.shuffle; },
 
